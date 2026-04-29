@@ -52,8 +52,8 @@ pub const CarSpecs = struct {
 
 };
 
-pub fn loadSpecsFromJson(allocator: std.mem.Allocator, file_path: []const u8) !CarSpecs {
-    const file_contents = try std.fs.cwd().readFileAlloc(allocator, file_path, 1024 * 1024);
+pub fn loadSpecsFromJson(io: std.Io, allocator: std.mem.Allocator, file_path: []const u8) !CarSpecs {
+    const file_contents = try std.Io.Dir.cwd().readFileAlloc(allocator, io, file_path, 1024 * 1024); 
     defer allocator.free(file_contents);
 
     const parsed = try std.json.parseFromSlice(CarSpecs, allocator, file_contents, .{
