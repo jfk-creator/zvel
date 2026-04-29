@@ -10,15 +10,16 @@ const shift_t = enum {
 };
 
 const PlayerInput = struct { 
-    shift_action: shift_t,
-    throttle_position: f32,
-    brake_position: f32,
-    steering_position: f32, 
+    shift_action: shift_t = .nothing,
+    throttle_position: f32 = 0.0,
+    brake_position: f32 = 0.0,
+    steering_position: f32 = 0.0, 
 };
 
 pub const Car = struct {
     carSpecs: CarSpecs,
     carState: CarState,
+    inputState: PlayerInput,
     const PPM: f32 = 20.0; 
     const DEBUG: bool = false; 
 
