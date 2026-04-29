@@ -9,7 +9,7 @@ const shift_t = enum {
     nothing,
 };
 
-const PlayerInput = struct { 
+pub const PlayerInput = struct { 
     shift_action: shift_t = .nothing,
     throttle_position: f32 = 0.0,
     brake_position: f32 = 0.0,
