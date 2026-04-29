@@ -1,0 +1,18 @@
+.{
+    .name = .zvel,
+    .version = "0.0.0",
+    .fingerprint = 0x293439971f84a30d, 
+    .minimum_zig_version = "0.15.2",
+    .dependencies = .{
+        .zlin = .{
+            .url = "git+https://github.com/jfk-creator/zlin.git#5a34774b2d91b72980388250479ea9760932f44b",
+            .hash = "zlin-0.0.0-8tL7r0dsAAA3tsy7W6qTQWyipQU7UcBwHE4WNtbqBAel",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "cars",
+    },
+}

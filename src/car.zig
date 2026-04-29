@@ -1,0 +1,81 @@
+const std = @import("std");
+
+const CarSpecs = @import("car_specs.zig").CarSpecs;
+const CarState = @import("car_state.zig").CarState;
+
+const shift_t = enum {
+    shift_up,
+    shift_down,
+    nothing,
+};
+
+const PlayerInput = struct { 
+    shift_action: shift_t,
+    throttle_position: f32,
+    brake_position: f32,
+    steering_position: f32, 
+};
+
+pub const Car = struct {
+    carSpecs: CarSpecs,
+    carState: CarState,
+    const PPM: f32 = 20.0; 
+    const DEBUG: bool = false; 
+
+    pub fn init(carSpecs: CarSpecs, carState: CarState) Car {
+        return .{ .carSpecs = carSpecs, .carState = carState, .inputState = .{}};
+    }
+
+    pub fn render(self: Car) void {
+        _ = self;
+    }
+
+    pub fn update(self: *Car, input: PlayerInput,  dt: f32) void {
+        var current_state = self.carState;
+        
+        // Trhottle, Steering, and Gear Input
+        current_state.gear = self.shift(input.shift_action);
+        current_state = current_state.updateSteeringAckermann(self.carSpecs, input.steering_position);
+        const rpm_torque = current_state.updateMotor(self.carSpecs, input.throttle_position);
+
+        // Machine
+        current_state.rpm = rpm_torque.rpm;
+        current_state = current_state.calculateWeightDistribution(self.carSpecs);
+        current_state = current_state.calculateSlipRatio(self.carSpecs);
+        current_state = current_state.calculateSlipAngles(self.carSpecs);
+        const lat_forces = current_state.calculateLateralForces(self.carSpecs);
+        const long_forces = current_state.calculateLongitudinalForces(self.carSpecs);
+
+        // Brake Input
+        current_state = current_state.updateWheelRotations(
+            self.carSpecs,
+            rpm_torque.torque,
+            input.brake_position,
+            long_forces, 
+            dt,
+        );
+
+        const chassis_forces = current_state.accumulateForces(self.carSpecs, long_forces, lat_forces);
+        current_state = current_state.integrateMotion(chassis_forces, dt);
+
+        self.carState = current_state;
+    }
+
+    pub fn shift(self: Car, shift_action: shift_t) u8 {
+        const current_gear = self.carState.gear;
+        const max_gear = self.carSpecs.gear_ratios.len - 1;
+        switch (shift_action) {
+            .shift_up => {
+                if(current_gear >= max_gear) return current_gear;
+                return current_gear + 1;
+            },
+            .shift_down => {
+                if(current_gear <= 0) return current_gear;
+                return current_gear - 1;
+            },
+            .nothing => {
+                return current_gear;
+            },
+        }
+    } 
+};

@@ -1,0 +1,66 @@
+{
+  "mass": 980.0,
+  "wheelbase": 2.24,
+  "track_width": 1.53,
+  "cg_height": 0.35,
+  "weight_bias_front": 0.44,
+  
+  "engine_inertia": 0.12,
+  "rpm_idle": 1000.0,
+  "rpm_max": 8000.0,
+  "torqueCurve": {
+    "a": 620.0, 
+    "b": 170.0,
+    "d": 6000.0,
+    "f_climb": 2500.0, 
+    "f_drop": 800.0
+  },
+  
+  "gear_ratios": [
+    -2.90, 
+    0.0, 
+    2.275, 
+    1.555, 
+    1.300, 
+    1.125, 
+    1.000, 
+    0.0
+  ],
+  "final_drive": 4.60,
+  "lsd_stiffness": 75.0,
+  
+  "max_steering_angle": 0.61,
+  "wheel_radius": 0.315,
+  "wheel_inertia": 1.5,
+  "max_brake_torque": 2200.0,
+
+"pacejka_long_front": { 
+      "b": 12.0, 
+      "c": 1.65, 
+      "d": 1.25, 
+      "e": 0.5 
+  },
+  "pacejka_long_rear":  { 
+      "b": 12.0, 
+      "c": 1.65, 
+      "d": 1.55, 
+      "e": 0.5 
+  },
+  "pacejka_lat_front": { 
+      "b": 9.0, 
+      "c": 1.35, 
+      "d": 1.90,  
+      "e": 0.6 
+  },
+  "pacejka_lat_rear": { 
+      "b": 9.5, 
+      "c": 1.35, 
+      "d": 1.50,  
+      "e": 0.4 
+  },
+  "drag_coefficient": 0.40,
+  "frontal_area": 1.85,
+
+  "name": "lancia_037",
+  "source": "https://www.lanciarally037.com/e-corsadati.htm" 
+}

@@ -1,0 +1,13 @@
+zig-cache/
+zig-out/
+.zig-cache/
+zig-pkg/
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*.nvim.lua
+
+.DS_Store
+Thumbs.db
