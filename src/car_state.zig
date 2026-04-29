@@ -192,8 +192,6 @@ pub const CarState = struct {
         torque_rl -= locking_torque;
         torque_rr += locking_torque;
 
-        std.debug.print("omega_diff: {d:2.1}", .{omega_diff});
-
         for (&new_state.wheels, state.wheels, 0..) |*new_wheel, old_wheel, i| {
             var applied_drive: f32 = 0.0;
             if (i == 2) applied_drive = torque_rl;
