@@ -78,16 +78,31 @@ pub const CarState = struct {
         return new_state;
     }
 
-    pub fn updateMotor(state: CarState, specs: CarSpecs, throttle_position: f32)
-        struct { rpm: f32, torque: f32 } {
+    pub fn updateMotor(
+        state: CarState,
+        specs: CarSpecs,
+        throttle_position: f32,
+    ) struct {
+        rpm: f32,
+        torque: f32,
+    } {
         const new_rpm = state.calculateRPM(specs);
         const torque_from_current_rpm = calculateTorqueFromRPM(new_rpm, specs);
-        // Hysteresis "Bap-Bap-Bap" - Limiter 
-        if(new_rpm >= specs.rpm_max) {
-           std.debug.print("limiter", .{}); 
-            return .{ .rpm = new_rpm, .torque = -200};
+
+        if (new_rpm >= specs.rpm_max) {
+            std.debug.print("limiter\n", .{}); 
+           
+            // could be a specs variable
+            const desired_rpm_drop_per_sec = 80000.0;
+            const rad_per_sec_sq = desired_rpm_drop_per_sec * (std.math.pi / 30.0);
+            const limiter_torque = -(specs.engine_inertia * rad_per_sec_sq);
+            return .{ .rpm = new_rpm, .torque = limiter_torque };
         }
-        return .{ .rpm = new_rpm, .torque = torque_from_current_rpm * throttle_position};
+
+        return .{ 
+            .rpm = new_rpm, 
+            .torque = torque_from_current_rpm * throttle_position
+        };
     }
 
     pub fn calculateRPM(state: CarState, specs: CarSpecs) f32 {
