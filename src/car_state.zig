@@ -179,6 +179,11 @@ pub const CarState = struct {
 
         var new_state = state;
         const gear_ratio = specs.gear_ratios[state.gear];
+        const total_ratio = gear_ratio * specs.final_drive;
+        var effective_inertia = specs.wheel_inertia;
+        if (state.gear > 0) {
+            effective_inertia += specs.engine_inertia * (total_ratio * total_ratio);
+        } 
         const wheel_torque = drive_torque * gear_ratio * specs.final_drive;
 
         var torque_rl = wheel_torque / 2.0;
@@ -204,7 +209,7 @@ pub const CarState = struct {
 
             const net_torque = applied_drive + applied_brake + traction_torque;
 
-            const angular_accel = net_torque / specs.wheel_inertia;
+            const angular_accel = net_torque / effective_inertia;
 
             new_wheel.* = old_wheel;
             new_wheel.w = old_wheel.w + (angular_accel * dt);
