@@ -209,7 +209,7 @@ pub const CarState = struct {
 
             const net_torque = applied_drive + applied_brake + traction_torque;
 
-            var angular_accel = 0;
+            var angular_accel: f32 = 0;
 
             if(i < 2)  angular_accel = net_torque / specs.wheel_inertia;
             if(i >= 2) angular_accel = net_torque / effective_inertia;
