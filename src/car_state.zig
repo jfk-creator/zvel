@@ -85,7 +85,7 @@ pub const CarState = struct {
         // Hysteresis "Bap-Bap-Bap" - Limiter 
         if(new_rpm >= specs.rpm_max) {
            std.debug.print("limiter", .{}); 
-            return .{ .rpm = new_rpm, .torque = -100};
+            return .{ .rpm = new_rpm, .torque = -200};
         }
         return .{ .rpm = new_rpm, .torque = torque_from_current_rpm * throttle_position};
     }

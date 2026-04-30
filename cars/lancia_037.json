@@ -1,16 +1,16 @@
 {
   "mass": 980.0,
-  "wheelbase": 2.24,
+  "wheelbase": 3.24,
   "track_width": 1.53,
   "cg_height": 0.35,
   "weight_bias_front": 0.44,
   
-  "engine_inertia": 0.16,
+  "engine_inertia": 1.16,
   "rpm_idle": 1000.0,
   "rpm_max": 8000.0,
   "torqueCurve": {
-    "a": 820.0, 
-    "b": 270.0,
+    "a": 2820.0, 
+    "b": 1170.0,
     "d": 6000.0,
     "f_climb": 2500.0, 
     "f_drop": 800.0
@@ -19,9 +19,9 @@
   "gear_ratios": [
     -2.90, 
     0.0, 
-    3.275, 
-    2.555, 
-    1.300, 
+    4.275, 
+    3.555, 
+    2.300, 
     1.125, 
     1.000, 
     0.0
@@ -29,7 +29,7 @@
   "final_drive": 4.60,
   "lsd_stiffness": 75.0,
   
-  "max_steering_angle": 0.61,
+  "max_steering_angle": 1.61,
   "wheel_radius": 0.315,
   "wheel_inertia": 1.5,
   "max_brake_torque": 2200.0,
@@ -37,13 +37,7 @@
 "pacejka_long_front": { 
       "b": 12.0, 
       "c": 1.65, 
-      "d": 1.25, 
-      "e": 0.5 
-  },
-  "pacejka_long_rear":  { 
-      "b": 12.0, 
-      "c": 1.65, 
-      "d": 1.25, 
+      "d": 1.95, 
       "e": 0.5 
   },
   "pacejka_lat_front": { 
@@ -52,11 +46,17 @@
       "d": 1.90,  
       "e": 0.6 
   },
+  "pacejka_long_rear":  { 
+      "b": 12.0, 
+      "c": 1.65, 
+      "d": 1.15, 
+      "e": 1.2 
+  },
   "pacejka_lat_rear": { 
       "b": 9.5, 
       "c": 1.35, 
-      "d": 1.20,  
-      "e": 0.4 
+      "d": 1.10,  
+      "e": 1.2 
   },
   "drag_coefficient": 0.40,
   "frontal_area": 1.85,
