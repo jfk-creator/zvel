@@ -2,7 +2,7 @@
     .name = .zvel,
     .version = "0.0.0",
     .fingerprint = 0x293439971f84a30d, 
-    .minimum_zig_version = "0.15.2",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .zlin = .{
             .url = "git+https://github.com/jfk-creator/zlin.git#5a34774b2d91b72980388250479ea9760932f44b",

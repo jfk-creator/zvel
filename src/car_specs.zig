@@ -50,6 +50,18 @@ pub const CarSpecs = struct {
     drag_coefficient: f32, 
     frontal_area: f32,
 
+    pub fn reloadTyreModel(
+        self: CarSpecs,
+        tyreModel: [4]PacejkaCoeffs,
+    ) CarSpecs {
+        var new_specs = self;
+        new_specs.pacejka_long_front = tyreModel[0];
+        new_specs.pacejka_long_rear = tyreModel[1];
+        new_specs.pacejka_lat_front =tyreModel[2];
+        new_specs.pacejka_lat_rear = tyreModel[3];
+
+        return new_specs; 
+    }
 };
 
 pub fn loadSpecsFromJson(io: std.Io, allocator: std.mem.Allocator, file_path: []const u8) !CarSpecs {
@@ -57,6 +69,18 @@ pub fn loadSpecsFromJson(io: std.Io, allocator: std.mem.Allocator, file_path: []
     defer allocator.free(file_contents);
 
     const parsed = try std.json.parseFromSlice(CarSpecs, allocator, file_contents, .{
+        .ignore_unknown_fields = true, 
+    });
+    
+    defer parsed.deinit();
+    return parsed.value;
+}
+
+pub fn loadTyreModelFromJson(io: std.Io, allocator: std.mem.Allocator, file_path: []const u8) ![4]PacejkaCoeffs {
+    const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, file_path, allocator, .unlimited); 
+    defer allocator.free(file_contents);
+
+    const parsed = try std.json.parseFromSlice([4]PacejkaCoeffs, allocator, file_contents, .{
         .ignore_unknown_fields = true, 
     });
     
