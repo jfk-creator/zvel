@@ -46,6 +46,17 @@ pub const CarSpecs = struct {
     pacejka_long_rear: PacejkaCoeffs,
     pacejka_lat_front: PacejkaCoeffs,
     pacejka_lat_rear: PacejkaCoeffs,
+
+    //suspension
+    suspension_rest_length: f32, 
+    max_suspension_travel: f32,
+
+    spring_stiffness_front: f32, 
+    damper_rate_front: f32,
+
+    spring_stiffness_rear: f32, 
+    damper_rate_rear: f32,
+
     // aero
     drag_coefficient: f32, 
     frontal_area: f32,

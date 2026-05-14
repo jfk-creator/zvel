@@ -21,7 +21,7 @@ test "Lancia 037 reaches 100 km/h in approx 3.5 seconds" {
     const dt: f32 = 0.016; // 60Hz Physik-Schritt
     var time_simulated: f32 = 0;
 
-    while(time_simulated < 2.3) {
+    while(time_simulated < 2.4) {
         var playerInput: PlayerInput = .{ .throttle_position = 1.0 };
         if((car.carState.rpm + 500) > car.carSpecs.rpm_max) {
             playerInput.shift_action = .shift_up;

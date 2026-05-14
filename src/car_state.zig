@@ -9,13 +9,19 @@ pub const WheelState = struct {
     w: f32, // rad/s
     slip_ratio: f32, 
     slip_angle: f32,
+    suspension_length: f32, 
+    suspension_velocity: f32,
 };
 
 pub const CarState = struct {
     p: Vec3,
-    rot: f32, // rad
+    yaw: f32, // rotate about z-axis 
+    pitch: f32, // tilt forward/backward 
+    roll: f32, // tilt left/right 
     a: Vec3, 
-    yaw_rate: f32, // rad/s*s
+    yaw_vel: f32, // rad/s*s
+    pitch_vel: f32, // rad/s*s
+    roll_vel: f32, // rad/s*s
     v: Vec3, 
     gear: u8, 
     rpm: f32, 
@@ -28,14 +34,20 @@ pub const CarState = struct {
             .w = 0, // rad/s 
             .slip_ratio = 0,
             .slip_angle = 0,
+            .suspension_length = 0.35, 
+            .suspension_velocity = 0,
         };
         const wheels: [4]WheelState = [_]WheelState{init_wheel} ** 4;
 
         return .{
-            .p = Vec3.init(posX, posY, 0),
-            .rot = 0,
+            .p = Vec3.init(posX, posY, 0.6),
+            .yaw = 0,
+            .pitch = 0,
+            .roll = 0,
             .a = Vec3.zero(),
-            .yaw_rate = 0,
+            .yaw_vel = 0,
+            .pitch_vel = 0,
+            .roll_vel = 0,
             .v = Vec3.zero(),
             .gear = 2,
             .rpm = 0,
@@ -43,41 +55,98 @@ pub const CarState = struct {
         };
     }
 
-    pub fn calculateWeightDistribution(state: CarState, specs: CarSpecs) CarState {
+    pub fn calculateSuspensionLengths(state: CarState, specs: CarSpecs, dt: f32) CarState {
         const L = specs.wheelbase;
-        const b = L * ( 1.0 - specs.weight_bias_front );// distance CG to front axle
-        const d = L * specs.weight_bias_front;// distance CG to rear axle
-        const h = specs.cg_height;  // CG height
-        const W = specs.mass * 9.81;
-        const M = specs.mass;
+        const dist_front = L * (1.0 - specs.weight_bias_front); 
+        const dist_rear = -L * specs.weight_bias_front; 
+        const half_track = specs.track_width / 2.0;
 
-        const forward_dir = Vec3.init( @sin(state.rot), @cos(state.rot), 0);
-        const longAcc: f32 = Vec3.dot(state.a, forward_dir);
-        var new_loads: [4]f32 = undefined;
-        new_loads[0] = ((d/L)*W - (h/L)*M*longAcc ) / 2; 
-        new_loads[1] = ((d/L)*W - (h/L)*M*longAcc ) / 2; 
-        new_loads[2] = ((b/L)*W + (h/L)*M*longAcc ) / 2; 
-        new_loads[3] = ((b/L)*W + (h/L)*M*longAcc ) / 2; 
-
-        if(@abs((new_loads[0] + new_loads[1] + new_loads[2] + new_loads[3]) - W ) > 1.0) {
-            std.log.warn("WeightError", .{});
-        }
+        // Position of the wheels relative to the Center of Gravity
+        const pos_x = [4]f32{ -half_track, half_track, -half_track, half_track };
+        const pos_y = [4]f32{ dist_front, dist_front, dist_rear, dist_rear };
 
         var new_state = state;
-        
-        for(&new_state.wheels, state.wheels, new_loads) |*new_wheel, old_wheel, new_load| {
-            new_wheel.* = WheelState{
-                .load = new_load,
-                .angle = old_wheel.angle,
-                .w  = old_wheel.w,
-                .slip_angle = old_wheel.slip_angle,
-                .slip_ratio = old_wheel.slip_ratio,
-            }; 
+
+        for (&new_state.wheels, state.wheels, pos_x, pos_y) |*new_wheel, old_wheel, rx, ry| {
+            // 1. Calculate the Z height offset of the chassis corner due to Pitch and Roll
+            // Positive pitch = nose up. Positive roll = right side up.
+            const corner_z_offset = (ry * @sin(state.pitch)) + (rx * @sin(state.roll));
+            
+            // Absolute World Z position of the chassis corner
+            const corner_world_z = state.p.z() + corner_z_offset;
+
+            // 2. Get the ground height at this wheel's X/Y coordinate.
+            // Right now, this assumes a perfectly flat ground at Z = 0.0. 
+            // TODO: Replace this 0.0 with a raycast to your 3D terrain!
+            const ground_z: f32 = 0.0;
+
+            // 3. Calculate suspension length (distance from corner down to the wheel center)
+            const distance_to_ground = corner_world_z - ground_z;
+            var calculated_length = distance_to_ground - specs.wheel_radius;
+
+            // 4. Clamp the extension. The suspension cannot extend further than its rest length.
+            // If it tries to, it means the wheel is leaving the ground (flying or rolling over).
+            if (calculated_length > specs.suspension_rest_length) {
+                calculated_length = specs.suspension_rest_length;
+            }
+
+            // 5. Calculate suspension velocity (how fast it is compressing or extending)
+            // We use finite difference (comparing new length to old length over time).
+            var velocity: f32 = 0.0;
+            if (dt > 0.0) {
+                velocity = (calculated_length - old_wheel.suspension_length) / dt;
+            }
+
+            new_wheel.* = old_wheel;
+            new_wheel.suspension_length = calculated_length;
+            new_wheel.suspension_velocity = velocity;
         }
 
         return new_state;
     }
 
+    // Step 4: Apply Hooke's Law and Damper forces
+    pub fn calculateSuspensionForces(state: CarState, specs: CarSpecs) CarState {
+        var new_state = state;
+
+        for (&new_state.wheels, state.wheels, 0..) |*new_wheel, old_wheel, i| {
+            const is_front = (i == 0 or i == 1);
+            const stiffness = if (is_front) specs.spring_stiffness_front else specs.spring_stiffness_rear;
+            const damper = if (is_front) specs.damper_rate_front else specs.damper_rate_rear;
+
+            // 1. Hooke's Law: F = k * x
+            // x is the compression amount. If rest_length is 0.35m and current length is 0.25m, 
+            // the spring is compressed by 0.10m.
+            const compression = specs.suspension_rest_length - old_wheel.suspension_length;
+            var spring_force = compression * stiffness;
+            
+            // Bump Stop Hack: If the suspension length goes below 0, the chassis has hit the ground.
+            // We apply a massive penalty force to push it back up immediately.
+            if (old_wheel.suspension_length < 0.0) {
+                spring_force += (-old_wheel.suspension_length) * 500000.0; 
+            }
+
+            // 2. Damper Force
+            // Opposes the velocity. If velocity is negative (suspension is compressing), 
+            // the damper pushes UP (positive force).
+            const damper_force = -old_wheel.suspension_velocity * damper;
+
+            // 3. Total Wheel Load
+            var load = spring_force + damper_force;
+
+            // The ground can only push UP. It cannot pull the car DOWN.
+            // If the load becomes negative, it means the wheel is airborne (0 load).
+            if (load < 0.0) {
+                load = 0.0;
+            }
+
+            new_wheel.* = old_wheel;
+            // Set the load! This automatically feeds into your Pacejka Grip formulas!
+            new_wheel.load = load; 
+        }
+
+        return new_state;
+    }
     pub fn updateMotor(
         state: CarState,
         specs: CarSpecs,
@@ -244,22 +313,6 @@ pub const CarState = struct {
         return new_state;
     }
 
-    // o = ( w*R - v_long ) / |v_long|
-//    pub fn calculateSlipRatio(state: CarState, specs: CarSpecs) CarState {
-//        const forward_dir = Vec3.init( @sin(state.rot), @cos(state.rot), 0);
-//        const v_long: f32 = Vec3.dot(state.v, forward_dir);
-//
-//        var new_state = state;
-//
-//        for (&new_state.wheels, state.wheels) |*new_wheel, old_wheel| {
-//            const slip_ratio = (old_wheel.w * specs.wheel_radius - v_long) / @max(@abs(v_long), 0.001);
-//            new_wheel.* = old_wheel;
-//            new_wheel.slip_ratio = slip_ratio;
-//        }
-//
-//        return new_state;
-//    }
-
     pub fn calculateSlipRatio(state: CarState, specs: CarSpecs) CarState {
         const L = specs.wheelbase;
         const dist_front = L * (1.0 - specs.weight_bias_front); 
@@ -267,8 +320,8 @@ pub const CarState = struct {
         const half_track = specs.track_width / 2.0;
 
         // Lokale Richtungsvektoren des Autos
-        const forward_dir = Vec3.init( @sin(state.rot), @cos(state.rot), 0.0 );
-        const right_dir = Vec3.init( @cos(state.rot), -@sin(state.rot), 0.0 );
+        const forward_dir = Vec3.init( @sin(state.yaw), @cos(state.yaw), 0.0 );
+        const right_dir = Vec3.init( @cos(state.yaw), -@sin(state.yaw), 0.0 );
 
         // Geschwindigkeit des Schwerpunkts (CG) im lokalen Raum
         const v_long = Vec3.dot(state.v, forward_dir);
@@ -282,9 +335,9 @@ pub const CarState = struct {
 
         for (&new_state.wheels, state.wheels, wheel_pos_x, wheel_pos_y) |*new_wheel, old_wheel, rx, ry| {
             // 1. Lokale Geschwindigkeit des Rades im Chassis-Koordinatensystem
-            // Die Gierrate (yaw_rate) erzeugt zusätzliche Geschwindigkeit an den Ecken!
-            const wheel_v_x = v_lat + (state.yaw_rate * ry); 
-            const wheel_v_y = v_long - (state.yaw_rate * rx);
+            // Die Gierrate (yaw_vel) erzeugt zusätzliche Geschwindigkeit an den Ecken!
+            const wheel_v_x = v_lat + (state.yaw_vel * ry); 
+            const wheel_v_y = v_long - (state.yaw_vel * rx);
 
             // 2. Geschwindigkeit in Richtung des Reifens transformieren (Lenkwinkel)
             const steer = old_wheel.angle;
@@ -305,7 +358,6 @@ pub const CarState = struct {
         return new_state;
     }
 
-    // Gemini
     pub fn calculateLongitudinalForces(state: CarState, specs: CarSpecs) [4]f32 {
         var longitudinal_forces: [4]f32 = undefined;
 
@@ -320,7 +372,6 @@ pub const CarState = struct {
         return longitudinal_forces;
     }
 
-    // Gemini
     pub fn calculateSlipAngles(state: CarState, specs: CarSpecs) CarState {
         const L = specs.wheelbase;
         const dist_front = L * (1.0 - specs.weight_bias_front); // Abstand Schwerpunkt zu Vorderachse
@@ -328,8 +379,8 @@ pub const CarState = struct {
         const half_track = specs.track_width / 2.0;
 
         // Lokale Richtungsvektoren des Autos
-        const forward_dir = Vec3.init(  @sin(state.rot),  @cos(state.rot),  0.0 );
-        const right_dir = Vec3.init(  @cos(state.rot), -@sin(state.rot), 0.0 );
+        const forward_dir = Vec3.init(  @sin(state.yaw),  @cos(state.yaw),  0.0 );
+        const right_dir = Vec3.init(  @cos(state.yaw), -@sin(state.yaw), 0.0 );
 
         // Geschwindigkeit des Schwerpunkts (Center of Gravity)
         const v_long = Vec3.dot(state.v, forward_dir);
@@ -346,8 +397,8 @@ pub const CarState = struct {
             // Lokale Geschwindigkeit DIESES Rades berechnen (Super wichtig für Kurven!)
             // state.w ist die Gierrate (Yaw Rate) in rad/s.
             // Wenn das Auto nach links gier (w positiv), bewegt sich die Front nach links (negativ X).
-            const wheel_v_lat = v_lat + (state.yaw_rate * ry); 
-            const wheel_v_long = v_long - (state.yaw_rate * rx);
+            const wheel_v_lat = v_lat + (state.yaw_vel * ry); 
+            const wheel_v_long = v_long - (state.yaw_vel * rx);
 
             // Verhindere Division durch Null bei Stillstand
             const wheel_v_long_abs = @max(@abs(wheel_v_long), 0.001);
@@ -363,7 +414,6 @@ pub const CarState = struct {
         return new_state;
     }
     
-    // Gemini
     pub fn evaluatePacejka(x: f32, coeffs: PacejkaCoeffs) f32 {
         const B = coeffs.b;
         const C = coeffs.c;
@@ -381,7 +431,6 @@ pub const CarState = struct {
         return D * @sin(C * std.math.atan(inner));
     }
     
-    // Gemini
     pub fn calculateLateralForces(state: CarState, specs: CarSpecs) [4]f32 {
         var lateral_forces: [4]f32 = undefined;
 
@@ -399,132 +448,164 @@ pub const CarState = struct {
         return lateral_forces;
     }
 
-    //Gemini
     pub const ChassisForces = struct {
-        a: Vec3,      // Lineare Beschleunigung (Lokal zum Auto: Y=Vorne, X=Rechts)
-        yaw_accel: f32, // Gierbeschleunigung (Rotationsbeschleunigung um die Z/Hoch-Achse)
+        a: Vec3,          // Global Linear Acceleration (X, Y, Z)
+        yaw_accel: f32,   // Rotation around Z (Steering)
+        pitch_accel: f32, // Rotation around X (Nose up/down)
+        roll_accel: f32,  // Rotation around Y (Leaning left/right)
     };
 
     pub fn accumulateForces(
         state: CarState, 
         specs: CarSpecs, 
-        long_forces: [4]f32, // Aus Gas/Bremse (Pacejka Longitudinal)
-        lat_forces: [4]f32   // Aus Kurvenfahrt (Pacejka Lateral)
+        long_forces: [4]f32, // Pacejka Longitudinal
+        lat_forces: [4]f32   // Pacejka Lateral
     ) ChassisForces {
 
-        // 1. Geometrie vorbereiten (Hebelarme)
         const L = specs.wheelbase;
         const dist_front = L * (1.0 - specs.weight_bias_front); 
         const dist_rear = -L * specs.weight_bias_front; 
         const half_track = specs.track_width / 2.0;
 
-        // Positionen der Räder relativ zum CG (X=Rechts/Links, Y=Vorne/Hinten)
+        // X = Right/Left, Y = Front/Rear
         const pos_x = [4]f32{ -half_track, half_track, -half_track, half_track };
         const pos_y = [4]f32{ dist_front, dist_front, dist_rear, dist_rear };
 
         var total_force_long: f32 = 0.0;
         var total_force_lat: f32 = 0.0;
-        var total_yaw_torque: f32 = 0.0;
+        var total_force_vert: f32 = 0.0;
 
-        // 2. Kräfte und Drehmomente summieren
+        var total_yaw_torque: f32 = 0.0;
+        var total_pitch_torque: f32 = 0.0;
+        var total_roll_torque: f32 = 0.0;
+
         for (0..4) |i| {
-            // --- Lenkwinkel berücksichtigen! ---
-            // Die Vorderräder (i=0, i=1) sind oft eingelenkt. Ihre Längs- und Seitenkräfte 
-            // wirken also NICHT mehr exakt parallel zum Auto, sondern gedreht!
             const steer = state.wheels[i].angle;
             const cos_s = @cos(steer);
             const sin_s = @sin(steer);
 
-            // Transformiere die Radkräfte in das lokale Koordinatensystem des Autos
             const f_long = long_forces[i];
             const f_lat = lat_forces[i];
+            
+            // The 3D Suspension Load pushes UP on the chassis
+            const f_vert = state.wheels[i].load; 
 
+            // Transform wheel forces to car-local axes
             const force_long_car = (f_long * cos_s) - (f_lat * sin_s);
-            
-            // DER SIMCADE-HACK: 
-            // Wenn wir Gas geben (f_long > 0), darf die Kraft uns in die Kurve ziehen.
-            // Wenn wir bremsen (f_long < 0), kappen wir den seitlichen Effekt, 
-            // damit die Bremse das Auto nicht in die falsche Richtung reißt!
             const steered_long_force = if (f_long > 0.0) (f_long * sin_s) else 0.0;
-            
             const force_lat_car = steered_long_force + (f_lat * cos_s);
 
-            // Summiere die linearen Kräfte
+            // Accumulate linear forces
             total_force_long += force_long_car;
             total_force_lat += force_lat_car;
+            total_force_vert += f_vert;
 
-            // Summiere das Gier-Drehmoment (Kreuzprodukt aus Position und Kraft)
-            // Torque = (X_pos * Y_force) - (Y_pos * X_force)
-            // Y_force ist hier unsere Längskraft (wirkt nach vorne)
-            // X_force ist hier unsere Seitenkraft (wirkt zur Seite)
-            const torque = (pos_y[i] * force_lat_car) - (pos_x[i] * force_long_car);
-            total_yaw_torque += torque;
+            // --- YAW (Steering) ---
+            total_yaw_torque += (pos_y[i] * force_lat_car) - (pos_x[i] * force_long_car);
+
+            // --- PITCH (Acceleration / Braking weight transfer) ---
+            // 1. Suspension pushes the nose up/down.
+            // 2. Longitudinal tire forces at ground level (-cg_height) pitch the chassis.
+            total_pitch_torque += (pos_y[i] * f_vert) + (force_long_car * specs.cg_height);
+
+            // --- ROLL (Cornering weight transfer) ---
+            // 1. Suspension pushes the sides up/down.
+            // 2. Lateral tire forces at ground level (-cg_height) roll the chassis.
+            total_roll_torque += (pos_x[i] * f_vert) + (force_lat_car * specs.cg_height);
         }
 
-        // 3. Aerodynamik (Luftwiderstand) hinzufügen
-        // Drag = 0.5 * rho * v^2 * Cd * A
-        const air_density = 1.225; // kg/m^3
-        const speed = state.v.length(); // Angenommen dein Vec3 hat eine length() Methode
-        const aero_drag_force = 0.5 * air_density * (speed * speed) * specs.drag_coefficient * specs.frontal_area;
+        // Apply Gravity (pulls down on the Z axis)
+        total_force_vert -= specs.mass * 9.81;
 
-        // Luftwiderstand wirkt immer entgegen der Bewegungsrichtung.
-        // Wir ziehen ihn der Einfachheit halber hier primär von der Längskraft ab (falls wir vorwärts fahren).
-        const speed_sign: f32 = if (Vec3.dot(state.v, Vec3.init( @sin(state.rot), @cos(state.rot), 0.0 )) > 0) 1.0 else -1.0;
+        // Apply Aero Drag
+        const air_density = 1.225;
+        const speed = state.v.length();
+        const aero_drag_force = 0.5 * air_density * (speed * speed) * specs.drag_coefficient * specs.frontal_area;
+        
+        const forward_dir = Vec3.init(@sin(state.yaw), @cos(state.yaw), 0.0);
+        const speed_sign: f32 = if (Vec3.dot(state.v, forward_dir) > 0) 1.0 else -1.0;
         total_force_long -= aero_drag_force * speed_sign;
 
-        // 4. Beschleunigungen berechnen (Newtons zweites Gesetz: a = F / m)
-
-        // Lineare Beschleunigung (Noch im LOKALEN System des Autos)
+        // Local Acceleration (X=Lat, Y=Long, Z=Vert)
         const local_a = Vec3.init(
             total_force_lat / specs.mass,
             total_force_long / specs.mass,
-            0.0 // Gravitation lassen wir hier weg, die drückt uns nur auf den Boden
+            total_force_vert / specs.mass
         );
 
-        // Transformiere die lokale Beschleunigung in die GLOABALE Welt (abhängig von der Auto-Rotation)
+        // Convert X/Y to Global space using Yaw (Z is already global)
         const global_a = Vec3.init(
-            (local_a.x() * @cos(state.rot)) + (local_a.y() * @sin(state.rot)),
-            (-local_a.x() * @sin(state.rot)) + (local_a.y() * @cos(state.rot)),
-            0.0
+            (local_a.x() * @cos(state.yaw)) + (local_a.y() * @sin(state.yaw)),
+            (-local_a.x() * @sin(state.yaw)) + (local_a.y() * @cos(state.yaw)),
+            local_a.z()
         );
 
-        // Gierbeschleunigung (Moment of Inertia um die Hochachse schätzen wir hier als Mass * Radius^2)
-        // Ein guter Schätzwert für Autos ist: I = Mass * (width^2 + length^2) / 12
-        const car_length = specs.wheelbase * 1.5; // Grobe Schätzung der Gesamtlänge
-        const yaw_inertia = specs.mass * ((specs.track_width * specs.track_width) + (car_length * car_length)) / 12.0;
+        // Calculate Rotational Inertias (Approximate Box Model)
+        const car_length = specs.wheelbase * 1.5;
+        const w2 = specs.track_width * specs.track_width;
+        const l2 = car_length * car_length;
+        const h2 = specs.cg_height * specs.cg_height;
 
-        const yaw_accel = total_yaw_torque / yaw_inertia;
+        const yaw_inertia = specs.mass * (w2 + l2) / 12.0;
+        const pitch_inertia = specs.mass * (h2 + l2) / 12.0;
+        const roll_inertia = specs.mass * (w2 + h2) / 12.0;
 
         return ChassisForces{
             .a = global_a,
-            .yaw_accel = yaw_accel,
+            .yaw_accel = total_yaw_torque / yaw_inertia,
+            .pitch_accel = total_pitch_torque / pitch_inertia,
+            .roll_accel = total_roll_torque / roll_inertia,
         };
     }
-    
-    // Gemini
-    pub fn integrateMotion(state: CarState, forces: ChassisForces, dt: f32) CarState {
 
-        // --- 1. Lineare Bewegung (Translation) ---
-        // Wir nutzen Semi-Implicit Euler für mehr Stabilität
-        const new_v = state.v.add(forces.a.scale(dt));
-        const new_p = state.p.add(new_v.scale(dt)); // Beachte: Wir nutzen new_v!
+    // Step 6: 6-DoF Integration
+    pub fn integrateMotion(state: CarState, specs: CarSpecs, forces: ChassisForces, dt: f32) CarState {
 
-        // --- 2. Rotatorische Bewegung (Rotation) ---
-        const new_yaw_rate = state.yaw_rate + (forces.yaw_accel * dt);
+        // --- 1. Linear Integration ---
+        var new_v = state.v.add(forces.a.scale(dt));
+        var new_p = state.p.add(new_v.scale(dt));
 
-        // Normalisiere die Rotation auf 0 bis 2*PI, damit der Float nicht irgendwann überläuft
-        // @rem ist Modulo in Zig für Floats
-        var new_rot = state.rot + (new_yaw_rate * dt);
-        new_rot = @rem(new_rot, 2.0 * std.math.pi); 
+        // SIMCADE HACK: Floor collision.
+        // If the bottom of the car (CG minus CG_Height) hits the ground, 
+        // we bounce it slightly so it doesn't clip through the world.
+        const min_z = specs.cg_height * 0.4; // Rough floorpan height
+        if (new_p.z() < min_z) {
+            new_p = Vec3.init(new_p.x(), new_p.y(), min_z);
+            new_v = Vec3.init(new_v.x(), new_v.y(), @max(new_v.z(), 0.0));
+        }
 
-        // --- 3. State updaten ---
+        // --- 2. Angular Integration ---
+        const new_yaw_vel = state.yaw_vel + (forces.yaw_accel * dt);
+        var new_pitch_vel = state.pitch_vel + (forces.pitch_accel * dt);
+        var new_roll_vel = state.roll_vel + (forces.roll_accel * dt);
+
+        var new_yaw = state.yaw + (new_yaw_vel * dt);
+        var new_pitch = state.pitch + (new_pitch_vel * dt);
+        var new_roll = state.roll + (new_roll_vel * dt);
+
+        new_yaw = @rem(new_yaw, 2.0 * std.math.pi); 
+
+        // SIMCADE HACK: Limit Pitch and Roll to ~45 degrees (0.8 rad)
+        // This prevents the car from violently barrel rolling if Pacejka grip spikes.
+        const max_tilt = 0.8;
+        if (new_pitch > max_tilt) { new_pitch = max_tilt; new_pitch_vel = 0.0; }
+        if (new_pitch < -max_tilt) { new_pitch = -max_tilt; new_pitch_vel = 0.0; }
+        if (new_roll > max_tilt) { new_roll = max_tilt; new_roll_vel = 0.0; }
+        if (new_roll < -max_tilt) { new_roll = -max_tilt; new_roll_vel = 0.0; }
+
+        // --- 3. Save State ---
         var new_state = state; 
-
         new_state.a = forces.a;
         new_state.v = new_v;
         new_state.p = new_p;
-        new_state.yaw_rate = new_yaw_rate;       
-        new_state.rot = new_rot; 
+        
+        new_state.yaw_vel = new_yaw_vel;       
+        new_state.pitch_vel = new_pitch_vel;       
+        new_state.roll_vel = new_roll_vel;       
+        
+        new_state.yaw = new_yaw; 
+        new_state.pitch = new_pitch; 
+        new_state.roll = new_roll; 
 
         return new_state;
     }

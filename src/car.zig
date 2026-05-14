@@ -41,7 +41,8 @@ pub const Car = struct {
 
         // Machine
         current_state.rpm = rpm_torque.rpm;
-        current_state = current_state.calculateWeightDistribution(self.carSpecs);
+        current_state = current_state.calculateSuspensionLengths(self.carSpecs, dt);
+        current_state = current_state.calculateSuspensionForces(self.carSpecs);
         current_state = current_state.calculateSlipRatio(self.carSpecs);
         current_state = current_state.calculateSlipAngles(self.carSpecs);
         const lat_forces = current_state.calculateLateralForces(self.carSpecs);
@@ -57,7 +58,7 @@ pub const Car = struct {
         );
 
         const chassis_forces = current_state.accumulateForces(self.carSpecs, long_forces, lat_forces);
-        current_state = current_state.integrateMotion(chassis_forces, dt);
+        current_state = current_state.integrateMotion(self.carSpecs, chassis_forces, dt);
 
         self.carState = current_state;
     }

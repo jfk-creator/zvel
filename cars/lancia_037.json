@@ -58,6 +58,16 @@
       "d": 1.80,  
       "e": 1.2 
   },
+
+  "suspension_rest_length": 0.35, 
+  "max_suspension_travel": 0.20,
+
+  "spring_stiffness_front": 25000.0, 
+  "damper_rate_front": 3000.0,
+
+  "spring_stiffness_rear": 35000.0, 
+  "damper_rate_rear": 400.0,
+
   "drag_coefficient": 0.40,
   "frontal_area": 1.85,
 
