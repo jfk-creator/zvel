@@ -2,6 +2,9 @@ pub const Car = @import("car.zig").Car;
 pub const CarSpecs = @import("car_specs.zig").CarSpecs;
 pub const CarState = @import("car_state.zig").CarState;
 pub const PlayerInput = @import("car.zig").PlayerInput; 
+pub const PacejkaCoefs = @import("car_specs.zig").PacejkaCoeffs;
+pub const TorqueCurve = @import("car_specs.zig").TorqueCurve;
+pub const WheelState = @import("car_state.zig").WheelState;
 pub const loadCar = @import("car_specs.zig").loadSpecsFromJson;
 pub const loadTyre =  @import("car_specs.zig").loadTyreModelFromJson;
 
