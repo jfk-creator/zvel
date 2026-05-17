@@ -156,6 +156,14 @@ pub const CarState = struct {
         torque: f32,
     } {
         const new_rpm = state.calculateRPM(specs);
+
+        if( throttle_position <= 0.01) {
+            return .{ 
+                .rpm = new_rpm, 
+                .torque = -0.5 * new_rpm, 
+            };
+        }
+
         const torque_from_current_rpm = calculateTorqueFromRPM(new_rpm, specs);
 
         if (new_rpm >= specs.rpm_max) {
@@ -177,7 +185,7 @@ pub const CarState = struct {
     pub fn calculateRPM(state: CarState, specs: CarSpecs) f32 {
         // rear wheels
         const wrr = (state.wheels[2].w + state.wheels[3].w) / 2.0; 
-        if (state.gear > 0 and wrr < -10.0) {
+        if (state.gear > 0 and wrr < -50.0) {
             std.debug.print("auto clutch", .{});
             return specs.rpm_idle;
         }
