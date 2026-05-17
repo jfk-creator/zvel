@@ -157,10 +157,10 @@ pub const CarState = struct {
     } {
         const new_rpm = state.calculateRPM(specs);
 
-        if( throttle_position <= 0.01) {
+        if( throttle_position <= 0.01 and state.v.lengthSq() > 3) {
             return .{ 
                 .rpm = new_rpm, 
-                .torque = -0.5 * new_rpm, 
+                .torque = -0.05 * new_rpm, 
             };
         }
 
