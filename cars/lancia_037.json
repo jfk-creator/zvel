@@ -33,30 +33,31 @@
   "wheel_radius": 0.315,
   "wheel_inertia": 1.5,
   "max_brake_torque": 2200.0,
-
-"pacejka_long_front": { 
-      "b": 12.0, 
-      "c": 1.65, 
-      "d": 1.95, 
-      "e": 0.5 
-  },
-  "pacejka_lat_front": { 
-      "b": 9.0, 
-      "c": 1.35, 
-      "d": 1.90,  
-      "e": 0.6 
-  },
-  "pacejka_long_rear":  { 
-      "b": 12.0, 
-      "c": 1.65, 
-      "d": 1.85, 
-      "e": 1.2 
-  },
-  "pacejka_lat_rear": { 
-      "b": 9.5, 
-      "c": 1.35, 
-      "d": 1.80,  
-      "e": 1.2 
+  "tyreModel" : {
+      "pacejka_long_front": { 
+          "b": 12.0, 
+          "c": 1.65, 
+          "d": 1.95, 
+          "e": 0.5 
+      },
+      "pacejka_lat_front": { 
+          "b": 9.0, 
+          "c": 1.35, 
+          "d": 1.90,  
+          "e": 0.6 
+      },
+      "pacejka_long_rear":  { 
+          "b": 12.0, 
+          "c": 1.65, 
+          "d": 1.85, 
+          "e": 1.2 
+      },
+      "pacejka_lat_rear": { 
+          "b": 9.5, 
+          "c": 1.35, 
+          "d": 1.80,  
+          "e": 1.2 
+      }
   },
 
   "suspension_rest_length": 0.35, 

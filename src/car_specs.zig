@@ -15,6 +15,12 @@ pub const TorqueCurve = struct {
     f_climb: f32 = 2500.0, 
     f_drop: f32 = 800.0,
 };
+pub const TyreModel = struct {
+    pacejka_long_front: PacejkaCoeffs,
+    pacejka_long_rear: PacejkaCoeffs,
+    pacejka_lat_front: PacejkaCoeffs,
+    pacejka_lat_rear: PacejkaCoeffs,
+};
 
 pub const CarSpecs = struct {
     // car geometry
@@ -42,10 +48,9 @@ pub const CarSpecs = struct {
     wheel_radius: f32,
     wheel_inertia: f32,
     max_brake_torque: f32, 
-    pacejka_long_front: PacejkaCoeffs,
-    pacejka_long_rear: PacejkaCoeffs,
-    pacejka_lat_front: PacejkaCoeffs,
-    pacejka_lat_rear: PacejkaCoeffs,
+
+    //tyre
+    tyreModel: TyreModel,
 
     //suspension
     suspension_rest_length: f32, 
@@ -63,13 +68,10 @@ pub const CarSpecs = struct {
 
     pub fn reloadTyreModel(
         self: CarSpecs,
-        tyreModel: [4]PacejkaCoeffs,
+        tyreModel: TyreModel,
     ) CarSpecs {
         var new_specs = self;
-        new_specs.pacejka_long_front = tyreModel[0];
-        new_specs.pacejka_long_rear = tyreModel[1];
-        new_specs.pacejka_lat_front =tyreModel[2];
-        new_specs.pacejka_lat_rear = tyreModel[3];
+        new_specs.tyreModel = tyreModel;
 
         return new_specs; 
     }
@@ -87,11 +89,11 @@ pub fn loadSpecsFromJson(io: std.Io, allocator: std.mem.Allocator, file_path: []
     return parsed.value;
 }
 
-pub fn loadTyreModelFromJson(io: std.Io, allocator: std.mem.Allocator, file_path: []const u8) ![4]PacejkaCoeffs {
+pub fn loadTyreModelFromJson(io: std.Io, allocator: std.mem.Allocator, file_path: []const u8) !TyreModel {
     const file_contents = try std.Io.Dir.cwd().readFileAlloc(io, file_path, allocator, .unlimited); 
     defer allocator.free(file_contents);
 
-    const parsed = try std.json.parseFromSlice([4]PacejkaCoeffs, allocator, file_contents, .{
+    const parsed = try std.json.parseFromSlice(TyreModel, allocator, file_contents, .{
         .ignore_unknown_fields = true, 
     });
     

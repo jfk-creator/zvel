@@ -1,6 +1,7 @@
 const std = @import("std");
 const CarSpecs = @import("car_specs.zig").CarSpecs;
 const PacejkaCoeffs = @import("car_specs.zig").PacejkaCoeffs;
+const TyreMode = @import("car_specs.zig").TyreModel;
 const Vec3 = @import("zlin").Vec3;
 
 pub const WheelState = struct {
@@ -371,7 +372,7 @@ pub const CarState = struct {
 
         for (state.wheels, 0..) |wheel, i| {
             const is_front = (i == 0 or i == 1);
-            const pacejka_profile = if (is_front) specs.pacejka_long_front else specs.pacejka_long_rear;
+            const pacejka_profile = if (is_front) specs.tyreModel.pacejka_long_front else specs.tyreModel.pacejka_long_rear;
             
             const grip_coefficient = evaluatePacejka(wheel.slip_ratio, pacejka_profile);
             longitudinal_forces[i] = wheel.load * grip_coefficient;
@@ -447,7 +448,7 @@ pub const CarState = struct {
             const is_front = (i == 0 or i == 1);
             
             // Wähle das richtige Pacejka-Profil
-            const pacejka_profile = if (is_front) specs.pacejka_lat_front else specs.pacejka_lat_rear;
+            const pacejka_profile = if (is_front) specs.tyreModel.pacejka_lat_front else specs.tyreModel.pacejka_lat_rear;
             
             const grip_coefficient = evaluatePacejka(wheel.slip_angle, pacejka_profile);
             lateral_forces[i] = -wheel.load * grip_coefficient;
