@@ -259,6 +259,65 @@ pub const CarState = struct {
 
         return new_state;
     }
+
+    // Rückgabe-Struct für die kombinierten Kräfte
+    pub const TireForces = struct {
+        long: [4]f32,
+        lat: [4]f32,
+    };
+
+    pub fn calculateCombinedForces(state: CarState, specs: CarSpecs) TireForces {
+        // 1. Hole die "rohen", unabhängigen Kräfte
+        const raw_long = state.calculateLongitudinalForces(specs);
+        const raw_lat = state.calculateLateralForces(specs);
+        
+        var result = TireForces{
+            .long = undefined,
+            .lat = undefined,
+        };
+
+        for (0..4) |i| {
+            const is_front = (i == 0 or i == 1);
+            
+            // 2. Finde das absolute Limit des Reifens (Der Faktor 'D' aus deiner Pacejka-Formel)
+            const d_long = if (is_front) specs.tyreModel.pacejka_long_front.d else specs.tyreModel.pacejka_long_rear.d;
+            const d_lat  = if (is_front) specs.tyreModel.pacejka_lat_front.d else specs.tyreModel.pacejka_lat_rear.d;
+            
+            // Die maximal mögliche Kraft in Newton (Reibwert * Radlast)
+            const max_f_long = state.wheels[i].load * d_long;
+            const max_f_lat  = state.wheels[i].load * d_lat;
+
+            const f_long = raw_long[i];
+            const f_lat = raw_lat[i];
+
+            // Verhindere Division durch Null, falls das Rad in der Luft ist
+            if (max_f_long > 0.001 and max_f_lat > 0.001) {
+                
+                // 3. Kammsche Ellipse: Wie viel % des Limits nutzen wir gerade?
+                const long_ratio = f_long / max_f_long;
+                const lat_ratio = f_lat / max_f_lat;
+                
+                // Pythagoreische Summe der Auslastung (a² + b² = c²)
+                const used_capacity_sq = (long_ratio * long_ratio) + (lat_ratio * lat_ratio);
+                
+                // 4. Wenn wir über 100% Auslastung sind (> 1.0), skalieren wir die Kräfte runter
+                if (used_capacity_sq > 1.0) {
+                    const over_capacity = @sqrt(used_capacity_sq); // z.B. 1.41 (141%) bei voll Gas und voll Lenken
+                    
+                    result.long[i] = f_long / over_capacity;
+                    result.lat[i] = f_lat / over_capacity;
+                } else {
+                    result.long[i] = f_long;
+                    result.lat[i] = f_lat;
+                }
+            } else {
+                result.long[i] = 0.0;
+                result.lat[i] = 0.0;
+            }
+        }
+
+        return result;
+    }
     
     // Gemini
     pub fn updateWheelRotations(

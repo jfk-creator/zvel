@@ -45,19 +45,20 @@ pub const Car = struct {
         current_state = current_state.calculateSuspensionForces(self.carSpecs);
         current_state = current_state.calculateSlipRatio(self.carSpecs);
         current_state = current_state.calculateSlipAngles(self.carSpecs);
-        const lat_forces = current_state.calculateLateralForces(self.carSpecs);
-        const long_forces = current_state.calculateLongitudinalForces(self.carSpecs);
+        // const lat_forces = current_state.calculateLateralForces(self.carSpecs);
+        // const long_forces = current_state.calculateLongitudinalForces(self.carSpecs);
 
+        const tire_forces = current_state.calculateCombinedForces(self.carSpecs);
         // Brake Input
         current_state = current_state.updateWheelRotations(
             self.carSpecs,
             rpm_torque.torque,
             input.brake_position,
-            long_forces, 
+            tire_forces.long, 
             dt,
         );
 
-        const chassis_forces = current_state.accumulateForces(self.carSpecs, long_forces, lat_forces);
+        const chassis_forces = current_state.accumulateForces(self.carSpecs, tire_forces.long, tire_forces.lat);
         current_state = current_state.integrateMotion(self.carSpecs, chassis_forces, dt);
 
         self.carState = current_state;
