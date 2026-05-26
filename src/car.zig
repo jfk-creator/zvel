@@ -2,7 +2,7 @@ const std = @import("std");
 
 const CarSpecs = @import("car_specs.zig").CarSpecs;
 const CarState = @import("car_state.zig").CarState;
-
+const TireModel = @import("car_specs.zig").TireModel;
 const shift_t = enum {
     shift_up,
     shift_down,
@@ -31,10 +31,10 @@ pub const Car = struct {
         _ = self;
     }
 
-    pub fn update(self: *Car, input: PlayerInput,  dt: f32) void {
+    pub fn update(self: *Car, input: PlayerInput, tireModel: TireModel,  dt: f32) void {
         var current_state = self.carState;
         
-        // Trhottle, Steering, and Gear Input
+        // Throttle, Steering, and Gear Input
         current_state.gear = self.shift(input.shift_action);
         current_state = current_state.updateSteeringAckermann(self.carSpecs, input.steering_position);
         const rpm_torque = current_state.updateMotor(self.carSpecs, input.throttle_position);
@@ -45,10 +45,8 @@ pub const Car = struct {
         current_state = current_state.calculateSuspensionForces(self.carSpecs);
         current_state = current_state.calculateSlipRatio(self.carSpecs);
         current_state = current_state.calculateSlipAngles(self.carSpecs);
-        // const lat_forces = current_state.calculateLateralForces(self.carSpecs);
-        // const long_forces = current_state.calculateLongitudinalForces(self.carSpecs);
 
-        const tire_forces = current_state.calculateCombinedForces(self.carSpecs);
+        const tire_forces = current_state.calculateCombinedForces(tireModel);
         // Brake Input
         current_state = current_state.updateWheelRotations(
             self.carSpecs,

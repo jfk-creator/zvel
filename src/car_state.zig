@@ -1,7 +1,7 @@
 const std = @import("std");
 const CarSpecs = @import("car_specs.zig").CarSpecs;
 const PacejkaCoeffs = @import("car_specs.zig").PacejkaCoeffs;
-const TyreMode = @import("car_specs.zig").TyreModel;
+const TireModel = @import("car_specs.zig").TireModel;
 const Vec3 = @import("zlin").Vec3;
 
 pub const WheelState = struct {
@@ -266,10 +266,10 @@ pub const CarState = struct {
         lat: [4]f32,
     };
 
-    pub fn calculateCombinedForces(state: CarState, specs: CarSpecs) TireForces {
+    pub fn calculateCombinedForces(state: CarState, tireModel: TireModel) TireForces {
         // 1. Hole die "rohen", unabhängigen Kräfte
-        const raw_long = state.calculateLongitudinalForces(specs);
-        const raw_lat = state.calculateLateralForces(specs);
+        const raw_long = state.calculateLongitudinalForces(tireModel);
+        const raw_lat = state.calculateLateralForces(tireModel);
         
         var result = TireForces{
             .long = undefined,
@@ -280,8 +280,8 @@ pub const CarState = struct {
             const is_front = (i == 0 or i == 1);
             
             // 2. Finde das absolute Limit des Reifens (Der Faktor 'D' aus deiner Pacejka-Formel)
-            const d_long = if (is_front) specs.tyreModel.pacejka_long_front.d else specs.tyreModel.pacejka_long_rear.d;
-            const d_lat  = if (is_front) specs.tyreModel.pacejka_lat_front.d else specs.tyreModel.pacejka_lat_rear.d;
+            const d_long = if (is_front) tireModel.pacejka_long_front.d else tireModel.pacejka_long_rear.d;
+            const d_lat  = if (is_front) tireModel.pacejka_lat_front.d else tireModel.pacejka_lat_rear.d;
             
             // Die maximal mögliche Kraft in Newton (Reibwert * Radlast)
             const max_f_long = state.wheels[i].load * d_long;
@@ -426,12 +426,12 @@ pub const CarState = struct {
         return new_state;
     }
 
-    pub fn calculateLongitudinalForces(state: CarState, specs: CarSpecs) [4]f32 {
+    pub fn calculateLongitudinalForces(state: CarState, tireModel: TireModel) [4]f32 {
         var longitudinal_forces: [4]f32 = undefined;
 
         for (state.wheels, 0..) |wheel, i| {
             const is_front = (i == 0 or i == 1);
-            const pacejka_profile = if (is_front) specs.tyreModel.pacejka_long_front else specs.tyreModel.pacejka_long_rear;
+            const pacejka_profile = if (is_front) tireModel.pacejka_long_front else tireModel.pacejka_long_rear;
             
             const grip_coefficient = evaluatePacejka(wheel.slip_ratio, pacejka_profile);
             longitudinal_forces[i] = wheel.load * grip_coefficient;
@@ -499,7 +499,7 @@ pub const CarState = struct {
         return D * @sin(C * std.math.atan(inner));
     }
     
-    pub fn calculateLateralForces(state: CarState, specs: CarSpecs) [4]f32 {
+    pub fn calculateLateralForces(state: CarState, tireModel: TireModel) [4]f32 {
         var lateral_forces: [4]f32 = undefined;
 
         for (state.wheels, 0..) |wheel, i| {
@@ -507,7 +507,7 @@ pub const CarState = struct {
             const is_front = (i == 0 or i == 1);
             
             // Wähle das richtige Pacejka-Profil
-            const pacejka_profile = if (is_front) specs.tyreModel.pacejka_lat_front else specs.tyreModel.pacejka_lat_rear;
+            const pacejka_profile = if (is_front) tireModel.pacejka_lat_front else tireModel.pacejka_lat_rear;
             
             const grip_coefficient = evaluatePacejka(wheel.slip_angle, pacejka_profile);
             lateral_forces[i] = -wheel.load * grip_coefficient;
