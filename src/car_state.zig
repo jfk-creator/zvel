@@ -164,7 +164,7 @@ pub const CarState = struct {
     } {
         const new_rpm = state.calculateRPM(specs);
 
-        if( throttle_position <= 0.01 and state.v.lengthSq() > 3) {
+        if( throttle_position <= 0.01 and state.v.lengthSq() > 3 and state.gear > 0) {
             return .{ 
                 .rpm = new_rpm, 
                 .torque = -0.05 * new_rpm, 
@@ -174,8 +174,6 @@ pub const CarState = struct {
         const torque_from_current_rpm = calculateTorqueFromRPM(new_rpm, specs);
 
         if (new_rpm >= specs.rpm_max) {
-            std.debug.print("limiter\n", .{}); 
-
             // could be a specs variable
             const desired_rpm_drop_per_sec = 80000.0;
             const rad_per_sec_sq = desired_rpm_drop_per_sec * (std.math.pi / 30.0);
@@ -193,7 +191,6 @@ pub const CarState = struct {
         // rear wheels
         const wrr = (state.wheels[2].w + state.wheels[3].w) / 2.0; 
         if (state.gear > 0 and wrr < -50.0) {
-            std.debug.print("auto clutch", .{});
             return specs.rpm_idle;
         }
         const gearRatio = specs.gear_ratios[state.gear];
