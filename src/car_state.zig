@@ -175,11 +175,12 @@ pub const CarState = struct {
         const torque_from_current_rpm = calculateTorqueFromRPM(new_rpm, specs);
         
         // limiter
-        if (new_rpm >= specs.rpm_max and state.gear > 0) {
+        if (new_rpm >= specs.rpm_max) {
             // could be a specs variable
             const desired_rpm_drop_per_sec = 80000.0;
             const rad_per_sec_sq = desired_rpm_drop_per_sec * (std.math.pi / 30.0);
-            const limiter_torque = -(specs.engine_inertia * rad_per_sec_sq);
+            const sign = if(state.gear > 0) -1 else 1;
+            const limiter_torque = (specs.engine_inertia * rad_per_sec_sq) * sign;
             return .{ .rpm = new_rpm, .torque = limiter_torque };
         }
 
