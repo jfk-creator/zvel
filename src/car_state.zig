@@ -154,6 +154,7 @@ pub const CarState = struct {
 
         return new_state;
     }
+
     pub fn updateMotor(
         state: CarState,
         specs: CarSpecs,
@@ -172,8 +173,9 @@ pub const CarState = struct {
         }
 
         const torque_from_current_rpm = calculateTorqueFromRPM(new_rpm, specs);
-
-        if (new_rpm >= specs.rpm_max) {
+        
+        // limiter
+        if (new_rpm >= specs.rpm_max and state.gear > 0) {
             // could be a specs variable
             const desired_rpm_drop_per_sec = 80000.0;
             const rad_per_sec_sq = desired_rpm_drop_per_sec * (std.math.pi / 30.0);
