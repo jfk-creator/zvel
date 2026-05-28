@@ -3,6 +3,7 @@ const std = @import("std");
 const CarSpecs = @import("car_specs.zig").CarSpecs;
 const CarState = @import("car_state.zig").CarState;
 const TireModel = @import("car_specs.zig").TireModel;
+const CollisionContact = @import("car_state.zig").CollisionContact;
 const shift_t = enum {
     shift_up,
     shift_down,
@@ -31,7 +32,7 @@ pub const Car = struct {
         _ = self;
     }
 
-    pub fn update(self: *Car, input: PlayerInput, tireModel: TireModel,  dt: f32) void {
+    pub fn update(self: *Car, input: PlayerInput, tireModel: TireModel,  dt: f32, collision: bool, contact: CollisionContact) void {
         var current_state = self.carState;
         
         // Throttle, Steering, and Gear Input
@@ -58,7 +59,14 @@ pub const Car = struct {
 
         const chassis_forces = current_state.accumulateForces(self.carSpecs, tire_forces.long, tire_forces.lat);
         current_state = current_state.integrateMotion(self.carSpecs, chassis_forces, dt);
-
+        if(collision) {
+            current_state = current_state.resolveCollision(
+                self.carSpecs, 
+                contact, 
+                0.15, 
+                0.40
+            );
+        }
         self.carState = current_state;
     }
 

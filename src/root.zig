@@ -6,6 +6,7 @@ pub const PacejkaCoefs = @import("car_specs.zig").PacejkaCoeffs;
 pub const TireModel = @import("car_specs.zig").TireModel;
 pub const TorqueCurve = @import("car_specs.zig").TorqueCurve;
 pub const WheelState = @import("car_state.zig").WheelState;
+pub const CollisionContact = @import("car_state.zig").CollisionContact; 
 pub const loadCar = @import("car_specs.zig").loadSpecsFromJson;
 pub const loadTire =  @import("car_specs.zig").loadTireModelFromJson;
 
@@ -30,7 +31,7 @@ test "Lancia 037 reaches 100 km/h in approx 3.5 seconds" {
             playerInput.shift_action = .shift_up;
             try testing.expectApproxEqAbs(8000, car.carState.rpm, 600.0);
         }
-        car.update(playerInput, tireModel, dt);
+        car.update(playerInput, tireModel, dt, false, .{});
         time_simulated += dt;
     }
 

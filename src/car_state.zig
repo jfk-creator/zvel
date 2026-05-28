@@ -4,6 +4,12 @@ const PacejkaCoeffs = @import("car_specs.zig").PacejkaCoeffs;
 const TireModel = @import("car_specs.zig").TireModel;
 const Vec3 = @import("zlin").Vec3;
 
+pub const CollisionContact = struct {
+    point: Vec3 = .zero(),       // Global position of the contact point
+    normal: Vec3 = .zero(),      // Normal pointing OUT of the obstacle and INTO the car (normalized)
+    penetration: f32 = 0,  // Depth of penetration
+};
+
 pub const WheelState = struct {
     load: f32,
     angle: f32, // rad
@@ -72,7 +78,7 @@ pub const CarState = struct {
             // 1. Calculate the Z height offset of the chassis corner due to Pitch and Roll
             // Positive pitch = nose up. Positive roll = right side up.
             const corner_z_offset = (ry * @sin(state.pitch)) + (rx * @sin(state.roll));
-            
+
             // Absolute World Z position of the chassis corner
             const corner_world_z = state.p.z() + corner_z_offset;
 
@@ -120,7 +126,7 @@ pub const CarState = struct {
             // the spring is compressed by 0.10m.
             const compression = specs.suspension_rest_length - old_wheel.suspension_length;
             var spring_force = compression * stiffness;
-            
+
             // Bump Stop Hack: If the suspension length goes below 0, the chassis has hit the ground.
             // We apply a massive penalty force to push it back up immediately.
             if (old_wheel.suspension_length < 0.0) {
@@ -169,7 +175,7 @@ pub const CarState = struct {
 
         if (new_rpm >= specs.rpm_max) {
             std.debug.print("limiter\n", .{}); 
-           
+
             // could be a specs variable
             const desired_rpm_drop_per_sec = 80000.0;
             const rad_per_sec_sq = desired_rpm_drop_per_sec * (std.math.pi / 30.0);
@@ -212,7 +218,7 @@ pub const CarState = struct {
     // Gemini
     pub fn updateSteering(state: CarState, specs: CarSpecs, steering_input: f32) CarState {
         var new_state = state;
-        
+
         // Lenkeinschlag berechnen (in Radiant)
         // Negativer Input (links) = negativer Winkel
         const target_angle = steering_input * specs.max_steering_angle;
@@ -220,7 +226,7 @@ pub const CarState = struct {
         // Vorderräder
         new_state.wheels[0].angle = target_angle;
         new_state.wheels[1].angle = target_angle;
-        
+
         // Hinterräder
         new_state.wheels[2].angle = 0.0;
         new_state.wheels[3].angle = 0.0;
@@ -231,7 +237,7 @@ pub const CarState = struct {
     // Gemini
     pub fn updateSteeringAckermann(state: CarState, specs: CarSpecs, steering_input: f32) CarState {
         var new_state = state;
-        
+
         // Lenkeinschlag berechnen (Wir tun so, als gäbe es nur ein virtuelles Rad in der Mitte)
         const target_angle = steering_input * specs.max_steering_angle;
 
@@ -270,7 +276,7 @@ pub const CarState = struct {
         // 1. Hole die "rohen", unabhängigen Kräfte
         const raw_long = state.calculateLongitudinalForces(tireModel);
         const raw_lat = state.calculateLateralForces(tireModel);
-        
+
         var result = TireForces{
             .long = undefined,
             .lat = undefined,
@@ -278,11 +284,11 @@ pub const CarState = struct {
 
         for (0..4) |i| {
             const is_front = (i == 0 or i == 1);
-            
+
             // 2. Finde das absolute Limit des Reifens (Der Faktor 'D' aus deiner Pacejka-Formel)
             const d_long = if (is_front) tireModel.pacejka_long_front.d else tireModel.pacejka_long_rear.d;
             const d_lat  = if (is_front) tireModel.pacejka_lat_front.d else tireModel.pacejka_lat_rear.d;
-            
+
             // Die maximal mögliche Kraft in Newton (Reibwert * Radlast)
             const max_f_long = state.wheels[i].load * d_long;
             const max_f_lat  = state.wheels[i].load * d_lat;
@@ -292,18 +298,18 @@ pub const CarState = struct {
 
             // Verhindere Division durch Null, falls das Rad in der Luft ist
             if (max_f_long > 0.001 and max_f_lat > 0.001) {
-                
+
                 // 3. Kammsche Ellipse: Wie viel % des Limits nutzen wir gerade?
                 const long_ratio = f_long / max_f_long;
                 const lat_ratio = f_lat / max_f_lat;
-                
+
                 // Pythagoreische Summe der Auslastung (a² + b² = c²)
                 const used_capacity_sq = (long_ratio * long_ratio) + (lat_ratio * lat_ratio);
-                
+
                 // 4. Wenn wir über 100% Auslastung sind (> 1.0), skalieren wir die Kräfte runter
                 if (used_capacity_sq > 1.0) {
                     const over_capacity = @sqrt(used_capacity_sq); // z.B. 1.41 (141%) bei voll Gas und voll Lenken
-                    
+
                     result.long[i] = f_long / over_capacity;
                     result.lat[i] = f_lat / over_capacity;
                 } else {
@@ -318,7 +324,7 @@ pub const CarState = struct {
 
         return result;
     }
-    
+
     // Gemini
     pub fn updateWheelRotations(
         state: CarState, 
@@ -411,14 +417,14 @@ pub const CarState = struct {
             const steer = old_wheel.angle;
             const cos_s = @cos(steer);
             const sin_s = @sin(steer);
-            
+
             // Wir projizieren die X/Y Geschwindigkeit exakt auf die Längsachse des Reifens
             const tire_v_long = (wheel_v_x * sin_s) + (wheel_v_y * cos_s);
 
             // 3. Slip Ratio berechnen (mit der ECHTEN lokalen Längsgeschwindigkeit)
             const denominator = @max(@abs(tire_v_long), 0.001);
             const slip_ratio = (old_wheel.w * specs.wheel_radius - tire_v_long) / denominator;
-            
+
             new_wheel.* = old_wheel;
             new_wheel.slip_ratio = slip_ratio;
         }
@@ -432,7 +438,7 @@ pub const CarState = struct {
         for (state.wheels, 0..) |wheel, i| {
             const is_front = (i == 0 or i == 1);
             const pacejka_profile = if (is_front) tireModel.pacejka_long_front else tireModel.pacejka_long_rear;
-            
+
             const grip_coefficient = evaluatePacejka(wheel.slip_ratio, pacejka_profile);
             longitudinal_forces[i] = wheel.load * grip_coefficient;
         }
@@ -481,7 +487,7 @@ pub const CarState = struct {
 
         return new_state;
     }
-    
+
     pub fn evaluatePacejka(x: f32, coeffs: PacejkaCoeffs) f32 {
         const B = coeffs.b;
         const C = coeffs.c;
@@ -498,17 +504,17 @@ pub const CarState = struct {
         // Gibt den Reibungskoeffizienten (Grip) zurück
         return D * @sin(C * std.math.atan(inner));
     }
-    
+
     pub fn calculateLateralForces(state: CarState, tireModel: TireModel) [4]f32 {
         var lateral_forces: [4]f32 = undefined;
 
         for (state.wheels, 0..) |wheel, i| {
             // Prüfen: Ist es ein Vorderrad (0 oder 1)?
             const is_front = (i == 0 or i == 1);
-            
+
             // Wähle das richtige Pacejka-Profil
             const pacejka_profile = if (is_front) tireModel.pacejka_lat_front else tireModel.pacejka_lat_rear;
-            
+
             const grip_coefficient = evaluatePacejka(wheel.slip_angle, pacejka_profile);
             lateral_forces[i] = -wheel.load * grip_coefficient;
         }
@@ -554,7 +560,7 @@ pub const CarState = struct {
 
             const f_long = long_forces[i];
             const f_lat = lat_forces[i];
-            
+
             // The 3D Suspension Load pushes UP on the chassis
             const f_vert = state.wheels[i].load; 
 
@@ -589,7 +595,7 @@ pub const CarState = struct {
         const air_density = 1.225;
         const speed = state.v.length();
         const aero_drag_force = 0.5 * air_density * (speed * speed) * specs.drag_coefficient * specs.frontal_area;
-        
+
         const forward_dir = Vec3.init(@sin(state.yaw), @cos(state.yaw), 0.0);
         const speed_sign: f32 = if (Vec3.dot(state.v, forward_dir) > 0) 1.0 else -1.0;
         total_force_long -= aero_drag_force * speed_sign;
@@ -666,18 +672,18 @@ pub const CarState = struct {
         new_state.a = forces.a;
         new_state.v = new_v;
         new_state.p = new_p;
-        
+
         new_state.yaw_vel = new_yaw_vel;       
         new_state.pitch_vel = new_pitch_vel;       
         new_state.roll_vel = new_roll_vel;       
-        
+
         new_state.yaw = new_yaw; 
         new_state.pitch = new_pitch; 
         new_state.roll = new_roll; 
 
         return new_state;
     }
-    
+
     pub fn printDebug(self: CarState, specs: CarSpecs) void {
         const w0 = self.wheels[0];
         const w1 = self.wheels[1];
@@ -697,4 +703,152 @@ pub const CarState = struct {
             w1.w * specs.wheel_radius * 3.6,
         });
     }
+
+    /// Transforms a local vector to global space using yaw.
+    pub fn localToGlobal(local: Vec3, yaw: f32) Vec3 {
+        const cos_y = @cos(yaw);
+        const sin_y = @sin(yaw);
+        return Vec3.init(
+            (local.x() * cos_y) + (local.y() * sin_y),
+            (-local.x() * sin_y) + (local.y() * cos_y),
+            local.z()
+        );
+    }
+
+    /// Transforms a global vector to local space using yaw.
+    pub fn globalToLocal(global: Vec3, yaw: f32) Vec3 {
+        const cos_y = @cos(yaw);
+        const sin_y = @sin(yaw);
+        return Vec3.init(
+            (global.x() * cos_y) - (global.y() * sin_y),
+            (global.x() * sin_y) + (global.y() * cos_y),
+            global.z()
+        );
+    }
+
+    pub fn applyInvInertiaGlobal(
+        v: Vec3, 
+        yaw: f32, 
+        pitch_inertia: f32, 
+        roll_inertia: f32, 
+        yaw_inertia: f32
+    ) Vec3 {
+        const local_v = globalToLocal(v, yaw);
+        const local_inv = Vec3.init(
+            local_v.x() / pitch_inertia,
+            local_v.y() / roll_inertia,
+            local_v.z() / yaw_inertia
+        );
+        return localToGlobal(local_inv, yaw);
+    }
+    pub fn resolveCollision(
+        state: CarState, 
+        specs: CarSpecs, 
+        contact: CollisionContact, 
+        restitution: f32, // bounciness (e.g., 0.1 for metal, 0.4 for bumper)
+        friction_coeff: f32 // friction of the wall (e.g., 0.3 - 0.5)
+    ) CarState {
+        var next_state = state;
+
+        // 1. Positional Correction (Sinking resolution)
+        // Pushes the car out of the wall to stop overlapping
+        const percent = 0.8; // Penetration percentage to resolve per frame
+        const slop = 0.01;   // Penetration allowance
+        const correction_mag = @max(contact.penetration - slop, 0.0) * percent;
+        next_state.p = next_state.p.add(contact.normal.scale(correction_mag));
+
+        // 2. Precompute Moments of Inertia (matching accumulateForces)
+        const car_length = specs.wheelbase * 1.5;
+        const w2 = specs.track_width * specs.track_width;
+        const l2 = car_length * car_length;
+        const h2 = specs.cg_height * specs.cg_height;
+
+        const yaw_inertia = specs.mass * (w2 + l2) / 12.0;
+        const pitch_inertia = specs.mass * (h2 + l2) / 12.0;
+        const roll_inertia = specs.mass * (w2 + h2) / 12.0;
+
+        // 3. Setup global vectors
+        const r = contact.point.sub(state.p); // Vector from COM to contact point
+
+        // Reconstruct global angular velocity vector
+        const omega_local = Vec3.init(state.pitch_vel, state.roll_vel, state.yaw_vel);
+        const omega_global = localToGlobal(omega_local, state.yaw);
+
+        // Velocity of the contact point on the car
+        const v_p = state.v.add(Vec3.cross(omega_global, r));
+
+        // Relative velocity along the collision normal
+        const vn = Vec3.dot(v_p, contact.normal);
+
+        // If the velocities are already separating, return the position-corrected state
+        if (vn >= 0.0) return next_state;
+
+        // 4. Normal Impulse Calculation (Baraff formulation)
+        const r_cross_n = Vec3.cross(r, contact.normal);
+        const invI_r_cross_n = applyInvInertiaGlobal(
+            r_cross_n, 
+            state.yaw, 
+            pitch_inertia, 
+            roll_inertia, 
+            yaw_inertia
+        );
+        const angular_component = Vec3.dot(Vec3.cross(invI_r_cross_n, r), contact.normal);
+        const inv_mass = 1.0 / specs.mass;
+
+        const denominator = inv_mass + angular_component;
+        const j_normal = -(1.0 + restitution) * vn / denominator;
+
+        // 5. Tangential Impulse (Friction)
+        const v_tangent = v_p.sub(contact.normal.scale(vn));
+        const tangent_len = v_tangent.length();
+
+        var tangent_dir = Vec3.zero();
+        var j_tangent: f32 = 0.0;
+
+        if (tangent_len > 0.0001) {
+            tangent_dir = v_tangent.scale(1.0 / tangent_len);
+            const vt = Vec3.dot(v_p, tangent_dir);
+
+            const r_cross_t = Vec3.cross(r, tangent_dir);
+            const invI_r_cross_t = applyInvInertiaGlobal(
+                r_cross_t, 
+                state.yaw, 
+                pitch_inertia, 
+                roll_inertia, 
+                yaw_inertia
+            );
+            const angular_component_t = Vec3.dot(Vec3.cross(invI_r_cross_t, r), tangent_dir);
+            const denominator_t = inv_mass + angular_component_t;
+
+            const j_tangent_max = -vt / denominator_t;
+
+            // Clamp the friction impulse using Coulomb's Law
+            const max_friction = j_normal * friction_coeff;
+            j_tangent = @min(@max(j_tangent_max, -max_friction), max_friction);
+        }
+
+        // 6. Apply Total Impulse to Velocities
+        const impulse_vec = contact.normal.scale(j_normal).add(tangent_dir.scale(j_tangent));
+
+        // Linear Velocity update
+        next_state.v = next_state.v.add(impulse_vec.scale(inv_mass));
+
+        // Angular Velocity update
+        const delta_omega_global = applyInvInertiaGlobal(
+            Vec3.cross(r, impulse_vec), 
+            state.yaw, 
+            pitch_inertia, 
+            roll_inertia, 
+            yaw_inertia
+        );
+        const delta_omega_local = globalToLocal(delta_omega_global, state.yaw);
+
+        next_state.pitch_vel += delta_omega_local.x();
+        next_state.roll_vel += delta_omega_local.y();
+        next_state.yaw_vel += delta_omega_local.z();
+
+        return next_state;
+    }
 };
+
+
