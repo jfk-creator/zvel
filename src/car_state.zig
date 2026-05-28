@@ -179,7 +179,7 @@ pub const CarState = struct {
             // could be a specs variable
             const desired_rpm_drop_per_sec = 80000.0;
             const rad_per_sec_sq = desired_rpm_drop_per_sec * (std.math.pi / 30.0);
-            const sign = if(state.gear > 0) -1 else 1;
+            const sign: f32 = if(state.gear > 0) -1 else 1;
             const limiter_torque = (specs.engine_inertia * rad_per_sec_sq) * sign;
             return .{ .rpm = new_rpm, .torque = limiter_torque };
         }
