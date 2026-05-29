@@ -4,6 +4,7 @@ pub const CarState = @import("car_state.zig").CarState;
 pub const PlayerInput = @import("car.zig").PlayerInput; 
 pub const PacejkaCoefs = @import("car_specs.zig").PacejkaCoeffs;
 pub const TireModel = @import("car_specs.zig").TireModel;
+pub const ShiftAction = @import("car.zig").shift_t;
 pub const TorqueCurve = @import("car_specs.zig").TorqueCurve;
 pub const WheelState = @import("car_state.zig").WheelState;
 pub const CollisionContact = @import("car_state.zig").CollisionContact; 

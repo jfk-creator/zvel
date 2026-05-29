@@ -4,7 +4,7 @@ const CarSpecs = @import("car_specs.zig").CarSpecs;
 const CarState = @import("car_state.zig").CarState;
 const TireModel = @import("car_specs.zig").TireModel;
 const CollisionContact = @import("car_state.zig").CollisionContact;
-const shift_t = enum {
+pub const shift_t = enum {
     shift_up,
     shift_down,
     nothing,
